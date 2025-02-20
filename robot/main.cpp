@@ -11,8 +11,11 @@ using namespace sf;
 const int mapQuadsWide = 10;
 const int mapQuadsHigh = 10;
 const int quadSize = 50;
+const int robotSixe = 45;
 
 const int movementCost = 5;
+
+const Vector2i mapOffset(70, 0);
 
 //sets the colour of a single quad, quadCoord indexed start at zero
 void setQuadColour(VertexArray& map, Vector2i quadCoord, Color colour)
@@ -25,13 +28,13 @@ void setQuadColour(VertexArray& map, Vector2i quadCoord, Color colour)
 }
 //map cood positions are set from the top left going from left to right in rows downward
 //sets the vertex positions in the vertex array that will represent the map to the user
-void setUpMap(VertexArray& map, Vector2i topLeftCoord)
+void setUpMap(VertexArray& map)
 {
-	Vector2i bottomLeftCoord = Vector2i(topLeftCoord.x + mapQuadsWide * quadSize, topLeftCoord.y + mapQuadsHigh * quadSize);
+	Vector2i bottomLeftCoord = Vector2i(mapOffset.x + mapQuadsWide * quadSize, mapOffset.y + mapQuadsHigh * quadSize);
 	int vertexIndex = 0;
-	for (int y = topLeftCoord.y; y < bottomLeftCoord.y; y += quadSize) 
+	for (int y = mapOffset.y; y < bottomLeftCoord.y; y += quadSize)
 	{
-		for (int x = topLeftCoord.x; x < bottomLeftCoord.x; x += quadSize)
+		for (int x = mapOffset.x; x < bottomLeftCoord.x; x += quadSize)
 		{
 			//the x + 1 etc are a simple quick way to add gridlines
 			map[vertexIndex].color = Color::Green;
@@ -144,17 +147,33 @@ class Robot
 public:
 	RobotState state;
 	RobotState goalState;
-	VertexArray& map;
 	vector<Action*> actions;
+	vector<int> plan;
+	Vector2f shownPosition;
+	VertexArray square;
 
-	Robot(Vector2i initialPosition, VertexArray& _map) : map(_map)
+	Robot(Vector2i initialPosition, VertexArray& _map)
 	{
 		state.position = initialPosition;
+		shownPosition = Vector2f(initialPosition.x, initialPosition.y);
+		square = VertexArray(Quads, 4);
 		actions.push_back(movementActionFactory(movementType::DOWN));
 		actions.push_back(movementActionFactory(movementType::LEFT));
 		actions.push_back(movementActionFactory(movementType::RIGHT));
 		actions.push_back(movementActionFactory(movementType::UP));
 		draw();
+	}
+
+	void run()
+	{
+		if (plan.size() > 0)
+		{
+			Action* nextAction = actions[plan[0]];
+			nextAction->apply(this->state);
+			shownPosition = (Vector2f)this->state.position;
+			plan.erase(plan.begin());
+			draw();
+		}
 	}
 
 	void setGoalState(RobotState state)
@@ -165,7 +184,28 @@ public:
 	//set color in map vertex array to show robot
 	void draw()
 	{
-		setQuadColour(map, state.position, Color::Blue);
+		float screenPositionX = shownPosition.x * quadSize;
+
+		float screenPositionY = shownPosition.y * quadSize;
+
+		float off = (quadSize - robotSixe) / 2;
+		square[0].color = Color::Blue;
+		square[0].position = Vector2f(screenPositionX + off, screenPositionY + off);
+		square[1].color = Color::Blue;
+		square[1].position = Vector2f(screenPositionX + robotSixe + off, screenPositionY + off);
+		square[2].color = Color::Blue;
+		square[2].position = Vector2f(screenPositionX + robotSixe + off, screenPositionY + robotSixe + off);
+		square[3].color = Color::Blue;
+		square[3].position = Vector2f(screenPositionX + off, screenPositionY + robotSixe + off);
+
+		square[0].position.x += mapOffset.x;
+		square[0].position.y += mapOffset.y;
+		square[1].position.x += mapOffset.x;
+		square[1].position.y += mapOffset.y;
+		square[2].position.x += mapOffset.x;
+		square[2].position.y += mapOffset.y;
+		square[3].position.x += mapOffset.x;
+		square[4].position.y += mapOffset.y;
 	}
 };
 
@@ -214,16 +254,11 @@ public:
 	}
 	void addOpenNode(float gCost, float tCost, RobotState& _state, SearchNode* _parentNode, int index)
 	{
-		cout << "ADDING OPEN NODE for position: " << _state.position.x << ", " << _state.position.y << endl;
 		SearchNode* newNode = new SearchNode(gCost, tCost, _state, _parentNode, index);
-		cout << "Set size: " << openSearchNodes.size() << endl;
 		openSearchNodes.push_back(newNode);
-		cout << "Set size: " << openSearchNodes.size() << endl;
-		cout << "is openSearchNodes empty: " << openSearchNodes.empty() << endl;
 	}
 	void closeTopOpenNode(SearchNode* nodeToDelete)
 	{
-		cout << "CLOSING: " << nodeToDelete->state.position.x << ", " << nodeToDelete->state.position.y << endl;
 		for (auto node = openSearchNodes.begin(); node < openSearchNodes.end(); node++)
 		{
 			if ((*node)->state == nodeToDelete->state)
@@ -234,18 +269,11 @@ public:
 				break;
 			}
 		}
-		cout << "is openSearchNodes empty: " << openSearchNodes.empty() << endl;
-		
 	}
 	SearchNode* getCheapestOpenNode()
 	{
 		float cheapestCost = INT32_MAX;
 		SearchNode* cheapestNode = nullptr;
-
-		if (!openSearchNodes.empty()) {
-			cout << "cost begin " << (*openSearchNodes.begin())->groundCost << endl;
-			cout << "cost end " << (*openSearchNodes.rbegin())->groundCost << endl;
-		}
 
 		for (SearchNode* node : openSearchNodes)
 		{
@@ -266,10 +294,8 @@ public:
 
 		while (openSearchNodes.empty() != true)
 		{
-			cout << "newNode" << endl;
 			SearchNode* currentStateNode = getCheapestOpenNode();
 			RobotState currentState = currentStateNode->state;
-			cout << "                                 current state: " << currentState.position.x << ", " << currentState.position.y << endl;
 
 			float currentGCost = currentStateNode->groundCost;
 			int actionIndex = -1;//index of the action within the robot's actions vector
@@ -282,8 +308,6 @@ public:
 					//calculate potential new state
 					RobotState potentialNewState(currentState);
 					action->apply(potentialNewState);
-
-					cout << "                      potential new position: " << potentialNewState.position.x << ", " << potentialNewState.position.y << endl;
 
 					//check if the potential new state is the goal state
 					if (potentialNewState == robot.goalState)
@@ -303,7 +327,6 @@ public:
 					//discard new state if it is contained in the closed list 
 					if (searchedStates.find(potentialNewState) != searchedStates.end())
 					{
-						cout << "state already closed for " << potentialNewState.position.x << ", " << potentialNewState.position.y << endl;
 						continue;
 					}
 					//compute the g and h costs
@@ -363,13 +386,13 @@ int main()
 {
 	RenderWindow window(VideoMode(600, 600), "Mandelbrot");
 	VertexArray map = VertexArray(Quads, (mapQuadsWide * mapQuadsHigh) * 4);
-	setUpMap(map, Vector2i(70, 0));
+	setUpMap(map);
 
 	Robot robot = Robot(Vector2i(0, 0), map);
 
 	RobotState goalState = RobotState();
-	goalState.position.x = 3;
-	goalState.position.y = 4;
+	goalState.position.x = 5;
+	goalState.position.y = 5;								//USE PYTHAG HEIURISTIC
 
 	robot.setGoalState(goalState);
 
@@ -378,8 +401,13 @@ int main()
 	cout << "Number of actions: " << actions.size() << endl;
 	for (int i : actions)
 	{
+		//copy actions into robot's plan
 		cout << i << endl;
+		robot.plan.push_back(i);
 	}
+	
+
+	const int frameRateLimit = 1;
 	window.setFramerateLimit(5);
 
 	while (window.isOpen())
@@ -392,8 +420,13 @@ int main()
 				window.close();
 			}
 		}
+
+		robot.run();
+
+
 		window.clear();
 		window.draw(map);
+		window.draw(robot.square);
 		window.display();
 	}
 	return 0;
