@@ -71,9 +71,48 @@ public:
 class WorldState
 {
 public:
-	RobotState robotState;
 	Vector2i boxPosition;
+
+	WorldState()
+	{
+
+	}
+
+	bool operator==(const WorldState& other) const {
+		if (boxPosition.x != other.boxPosition.x || boxPosition.y != other.boxPosition.y)
+		{
+			return false;
+		}
+		return true;
+	}
 };
+
+class RobotMentalState
+{
+public:
+	RobotState robot;
+	WorldState world;
+	RobotMentalState() {}
+	RobotMentalState(RobotState rb, WorldState ws)
+	{
+		robot = rb;
+		world = ws;
+	}
+
+	bool operator==(const RobotMentalState& other) const {
+		if (!(robot == other.robot))
+		{
+			return false;
+		}
+		if (!(world == other.world))
+		{
+			return false;
+		}
+		return true;
+	}
+};
+
+WorldState worldState = WorldState();
 
 class Action
 {
@@ -84,8 +123,8 @@ public:
 
 	}
 	float cost;
-	virtual bool isPossible(RobotState& currentPosition) = 0;
-	virtual void apply(RobotState& state) = 0;
+	virtual bool isPossible(RobotMentalState& currentPosition) = 0;
+	virtual void apply(RobotState& robot, WorldState world) = 0;
 	~Action() = default;
 };
 
@@ -109,16 +148,16 @@ public:
 		cost = _cost;
 	}
 
-	void apply(RobotState& state) override
+	void apply(RobotState& robot, WorldState world) override
 	{
-		state.position.x += deltaX;
-		state.position.y += deltaY;
+		robot.position.x += deltaX;
+		robot.position.y += deltaY;
 	}
 
-	bool isPossible(RobotState& state) override
+	bool isPossible(RobotMentalState& mentalState) override
 	{
-		int newXCoord = state.position.x + deltaX;
-		int newYCoord = state.position.y + deltaY;
+		int newXCoord = mentalState.robot.position.x + deltaX;
+		int newYCoord = mentalState.robot.position.y + deltaY;
 		if (newXCoord >= 0 && newYCoord >= 0)
 		{
 			if (newXCoord < mapQuadsWide && newYCoord < mapQuadsHigh)
@@ -154,8 +193,8 @@ class Robot
 {
 
 public:
-	RobotState state;
-	RobotState goalState;
+	RobotMentalState goalState;
+	RobotMentalState knownWorldState;
 	vector<Action*> actions;
 	vector<int> plan;
 	Vector2f shownPosition;
@@ -163,7 +202,9 @@ public:
 
 	Robot(Vector2i initialPosition, VertexArray& _map)
 	{
-		state.position = initialPosition;
+		knownWorldState = RobotMentalState(RobotState(), WorldState());
+		knownWorldState.robot.position = initialPosition;
+		goalState = RobotMentalState(RobotState(), WorldState());
 		shownPosition = Vector2f(initialPosition.x, initialPosition.y);
 		square = VertexArray(Quads, 4);
 		actions.push_back(movementActionFactory(movementType::DOWN));
@@ -178,14 +219,15 @@ public:
 		if (plan.size() > 0)
 		{
 			Action* nextAction = actions[plan[0]];
-			nextAction->apply(this->state);
-			shownPosition = (Vector2f)this->state.position;
+			nextAction->apply(this->knownWorldState.robot, worldState);
+
+			shownPosition = (Vector2f)this->knownWorldState.robot.position;
 			plan.erase(plan.begin());
 			draw();
 		}
 	}
 
-	void setGoalState(RobotState state)
+	void setGoalState(RobotMentalState state)
 	{
 		goalState = state;
 	}
@@ -223,7 +265,7 @@ class SearchNode
 {
 	
 public:
-	SearchNode(float gCost, float tCost, RobotState& _state, SearchNode* _parentNode, int index)
+	SearchNode(float gCost, float tCost, RobotMentalState& _state, SearchNode* _parentNode, int index)
 	{
 		numSearchNodes++;
 		groundCost = gCost;
@@ -236,12 +278,12 @@ public:
 	float totalCost;//g cost + h cost
 	int actionIndex;//index of the where the action taken to reach this state is located in the robot's action vector
 	SearchNode* parentNode;
-	RobotState state;
+	RobotMentalState state;
 };
 
-struct RobotStateHash {
-	size_t operator()(const RobotState& state) const {
-		return hash<int>()(state.position.x) ^ (hash<int>()(state.position.y) << 1);
+struct RobotMentalStateHash {
+	size_t operator()(const RobotMentalState& mentalState) const {
+		return hash<int>()(mentalState.robot.position.x) ^ (hash<int>()(mentalState.robot.position.y) << 1);
 	}
 };
 
@@ -249,20 +291,20 @@ class AStarPlanner
 {
 private:
 	vector<SearchNode*> openSearchNodes;
-	unordered_set<RobotState, RobotStateHash> searchedStates;
-	function<float(RobotState, RobotState)> heuristic;
+	unordered_set<RobotMentalState, RobotMentalStateHash> searchedStates;
+	function<float(RobotMentalState, RobotMentalState)> heuristic;
 public:
-	AStarPlanner(function<float(RobotState, RobotState)> initialHeuristic)
+	AStarPlanner(function<float(RobotMentalState, RobotMentalState)> initialHeuristic)
 	{
 		openSearchNodes = vector<SearchNode*>();
-		searchedStates = unordered_set<RobotState, RobotStateHash>();
+		searchedStates = unordered_set<RobotMentalState, RobotMentalStateHash>();
 		heuristic = initialHeuristic;
 	}
-	void setHeuristic(function<float(RobotState, RobotState)> newHeuristic)
+	void setHeuristic(function<float(RobotMentalState, RobotMentalState)> newHeuristic)
 	{
 		heuristic = newHeuristic;
 	}
-	void addOpenNode(float gCost, float tCost, RobotState& _state, SearchNode* _parentNode, int index)
+	void addOpenNode(float gCost, float tCost, RobotMentalState& _state, SearchNode* _parentNode, int index)
 	{
 		SearchNode* newNode = new SearchNode(gCost, tCost, _state, _parentNode, index);
 		openSearchNodes.push_back(newNode);
@@ -300,13 +342,13 @@ public:
 	{
 		numSearchNodes = 0;
 		vector<Action*> actions = robot.actions;
-		addOpenNode(0, 0, robot.state, nullptr, -1);
+		addOpenNode(0, 0, robot.knownWorldState, nullptr, -1);
 		
 
 		while (openSearchNodes.empty() != true)
 		{
 			SearchNode* currentStateNode = getCheapestOpenNode();
-			RobotState currentState = currentStateNode->state;
+			RobotMentalState currentState = currentStateNode->state;
 
 			float currentGCost = currentStateNode->groundCost;
 			int actionIndex = -1;//index of the action within the robot's actions vector
@@ -317,8 +359,8 @@ public:
 				if (action->isPossible(currentState))
 				{
 					//calculate potential new state
-					RobotState potentialNewState(currentState);
-					action->apply(potentialNewState);
+					RobotMentalState potentialNewState(currentState);
+					action->apply(potentialNewState.robot, potentialNewState.world);
 
 					//check if the potential new state is the goal state
 					if (potentialNewState == robot.goalState)
@@ -379,17 +421,17 @@ public:
 
 //AN ALTERNATIVE IS HAVING HEURISTIC CLASSES WHICH CAN BE SET WITH, AND ONLY USE, THE DATA THEY ACTUALLY NEED
 
-float manhattanHeuristic(RobotState startState, RobotState goalState)
+float manhattanHeuristic(RobotMentalState startState, RobotMentalState goalState)
 {
-	Vector2i startPosition = startState.position;
-	Vector2i goalPosition = goalState.position;
+	Vector2i startPosition = startState.robot.position;
+	Vector2i goalPosition = goalState.robot.position;
 	return (abs(goalPosition.x - startPosition.x) + abs(goalPosition.y - startPosition.y)) * movementCost * 1.5;
 }
 
-float euclideanHeursitic(RobotState startState, RobotState goalState)
+float euclideanHeursitic(RobotMentalState startState, RobotMentalState goalState)
 {
-	Vector2i startPosition = startState.position;
-	Vector2i goalPosition = goalState.position;
+	Vector2i startPosition = startState.robot.position;
+	Vector2i goalPosition = goalState.robot.position;
 	return std::sqrt(std::pow(goalPosition.x - startPosition.x, 2) + std::pow(goalPosition.y - startPosition.y, 2)) * movementCost * 1.5;
 	
 }
@@ -405,9 +447,11 @@ int main()
 
 	RobotState goalState = RobotState();
 	goalState.position.x = 9;
-	goalState.position.y = 9;								//USE PYTHAG HEIURISTIC
+	goalState.position.y = 9;
 
-	robot.setGoalState(goalState);
+	RobotMentalState goalMentalState = RobotMentalState(goalState, worldState);
+
+	robot.setGoalState(goalMentalState);
 
 	AStarPlanner planner = AStarPlanner(manhattanHeuristic);
 //	AStarPlanner planner = AStarPlanner(euclideanHeursitic);
