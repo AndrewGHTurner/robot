@@ -376,7 +376,15 @@ float manhattanHeuristic(RobotState startState, RobotState goalState)
 {
 	Vector2i startPosition = startState.position;
 	Vector2i goalPosition = goalState.position;
-	return (abs(goalPosition.x - startPosition.x) + abs(goalPosition.y - startPosition.y)) * movementCost;
+	return (abs(goalPosition.x - startPosition.x) + abs(goalPosition.y - startPosition.y)) * movementCost * 1.5;
+}
+
+float euclideanHeursitic(RobotState startState, RobotState goalState)
+{
+	Vector2i startPosition = startState.position;
+	Vector2i goalPosition = goalState.position;
+	return std::sqrt(std::pow(goalPosition.x - startPosition.x, 2) + std::pow(goalPosition.y - startPosition.y, 2)) * movementCost * 1.5;
+	
 }
 
 
@@ -395,6 +403,7 @@ int main()
 	robot.setGoalState(goalState);
 
 	AStarPlanner planner = AStarPlanner(manhattanHeuristic);
+//	AStarPlanner planner = AStarPlanner(euclideanHeursitic);
 	vector<int> actions = planner.generatePlan(robot);
 	cout << "Number of actions: " << actions.size() << endl;
 	for (int i : actions)
