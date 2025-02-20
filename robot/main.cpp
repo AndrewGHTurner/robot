@@ -11,9 +11,11 @@ using namespace sf;
 const int mapQuadsWide = 10;
 const int mapQuadsHigh = 10;
 const int quadSize = 50;
-const int robotSixe = 45;
+const int robotSize = 45;
+const int cakeSize = 20;
 
 const int movementCost = 5;
+const int pickUpPutDownCost = 10;
 
 int numSearchNodes = 0;//number of search nodes generated when looking for a solution
 
@@ -57,6 +59,7 @@ class RobotState
 {
 public:
 	Vector2i position;
+	bool holdingCake = false;
 
 	// Define equality operator (required for unordered_set)
 	bool operator==(const RobotState& other) const {
@@ -71,7 +74,7 @@ public:
 class WorldState
 {
 public:
-	Vector2i boxPosition;
+	Vector2i cakePosition;
 
 	WorldState()
 	{
@@ -79,9 +82,9 @@ public:
 	}
 
 	bool operator==(const WorldState& other) const {
-		if (boxPosition.x != other.boxPosition.x || boxPosition.y != other.boxPosition.y)
+		if (cakePosition.x != other.cakePosition.x || cakePosition.y != other.cakePosition.y)
 		{
-			return false;
+		//	return false;
 		}
 		return true;
 	}
@@ -123,9 +126,50 @@ public:
 
 	}
 	float cost;
-	virtual bool isPossible(RobotMentalState& currentPosition) = 0;
+	virtual bool isPossible(RobotMentalState& mentalState) = 0;
 	virtual void apply(RobotState& robot, WorldState world) = 0;
 	~Action() = default;
+};
+
+class PutDownAction : public Action
+{
+public:
+	PutDownAction(float _cost)
+	{
+		cost = _cost;
+	}
+	void apply(RobotState& robot, WorldState world) override
+	{
+		robot.holdingCake = false;
+	}
+	bool isPossible(RobotMentalState& mentalState) override
+	{
+		return mentalState.robot.holdingCake;
+	}
+};
+
+class PickUpAction : public Action
+{
+public:
+	PickUpAction(float _cost)
+	{
+		cost = _cost;
+	}
+	void apply(RobotState& robot, WorldState world) override
+	{
+		robot.holdingCake = true;
+	}
+	bool isPossible(RobotMentalState& mentalState) override
+	{
+		if (mentalState.robot.position.x == mentalState.world.cakePosition.x)
+		{
+			if (mentalState.robot.position.y == mentalState.world.cakePosition.y)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 };
 
 enum movementType
@@ -152,6 +196,11 @@ public:
 	{
 		robot.position.x += deltaX;
 		robot.position.y += deltaY;
+		if (robot.holdingCake)
+		{
+			world.cakePosition.x += deltaX;
+			world.cakePosition.y += deltaY;
+		}
 	}
 
 	bool isPossible(RobotMentalState& mentalState) override
@@ -211,6 +260,8 @@ public:
 		actions.push_back(movementActionFactory(movementType::LEFT));
 		actions.push_back(movementActionFactory(movementType::RIGHT));
 		actions.push_back(movementActionFactory(movementType::UP));
+		actions.push_back(new PickUpAction(pickUpPutDownCost));
+		actions.push_back(new PutDownAction(pickUpPutDownCost));
 		draw();
 	}
 
@@ -239,15 +290,15 @@ public:
 
 		float screenPositionY = shownPosition.y * quadSize;
 
-		float off = (quadSize - robotSixe) / 2;
+		float off = (quadSize - robotSize) / 2;
 		square[0].color = Color::Blue;
 		square[0].position = Vector2f(screenPositionX + off, screenPositionY + off);
 		square[1].color = Color::Blue;
-		square[1].position = Vector2f(screenPositionX + robotSixe + off, screenPositionY + off);
+		square[1].position = Vector2f(screenPositionX + robotSize + off, screenPositionY + off);
 		square[2].color = Color::Blue;
-		square[2].position = Vector2f(screenPositionX + robotSixe + off, screenPositionY + robotSixe + off);
+		square[2].position = Vector2f(screenPositionX + robotSize + off, screenPositionY + robotSize + off);
 		square[3].color = Color::Blue;
-		square[3].position = Vector2f(screenPositionX + off, screenPositionY + robotSixe + off);
+		square[3].position = Vector2f(screenPositionX + off, screenPositionY + robotSize + off);
 
 		square[0].position.x += mapOffset.x;
 		square[0].position.y += mapOffset.y;
@@ -443,6 +494,14 @@ int main()
 	VertexArray map = VertexArray(Quads, (mapQuadsWide * mapQuadsHigh) * 4);
 	setUpMap(map);
 
+
+	worldState.cakePosition.x = 3;
+	worldState.cakePosition.y = 6;
+
+	sf::CircleShape circle(cakeSize);
+	circle.setFillColor(sf::Color::Red);
+
+
 	Robot robot = Robot(Vector2i(0, 0), map);
 
 	RobotState goalState = RobotState();
@@ -480,12 +539,19 @@ int main()
 		}
 
 		robot.run();
-
+		float off = (quadSize - cakeSize);
+		float circleXCoord = (worldState.cakePosition.x * quadSize - (0.5 * quadSize)) + mapOffset.x + off;
+		float circleYCoord = (worldState.cakePosition.y * quadSize - (0.5 * quadSize)) + mapOffset.y + off;
+		circle.setPosition(Vector2f(circleXCoord, circleYCoord));
 
 		window.clear();
 		window.draw(map);
 		window.draw(robot.square);
+		window.draw(circle);
 		window.display();
 	}
 	return 0;
 }
+
+//add pick up and put down actions
+//create new heurostic function
