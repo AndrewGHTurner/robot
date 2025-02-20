@@ -15,6 +15,8 @@ const int robotSixe = 45;
 
 const int movementCost = 5;
 
+int numSearchNodes = 0;//number of search nodes generated when looking for a solution
+
 const Vector2i mapOffset(70, 0);
 
 //sets the colour of a single quad, quadCoord indexed start at zero
@@ -216,6 +218,7 @@ class SearchNode
 public:
 	SearchNode(float gCost, float tCost, RobotState& _state, SearchNode* _parentNode, int index)
 	{
+		numSearchNodes++;
 		groundCost = gCost;
 		totalCost = tCost;
 		parentNode = _parentNode;
@@ -288,6 +291,7 @@ public:
 	}
 	vector<int> generatePlan(Robot& robot)
 	{
+		numSearchNodes = 0;
 		vector<Action*> actions = robot.actions;
 		addOpenNode(0, 0, robot.state, nullptr, -1);
 		
@@ -321,6 +325,7 @@ public:
 							actions.push_back(node->actionIndex);
 							node = node->parentNode;
 						}
+						cout << "plan generated using " << numSearchNodes << " search nodes" << endl;
 						return actions;
 					}
 
@@ -340,7 +345,7 @@ public:
 					{
 						if ((*node)->state == potentialNewState)
 						{
-							if ((*node)->groundCost < newGCost)
+							if ((*node)->groundCost <= newGCost)
 							{
 								openSearchNodes.erase(node);//delete old more expensive state
 								break;
@@ -375,13 +380,6 @@ float manhattanHeuristic(RobotState startState, RobotState goalState)
 }
 
 
-
-
-
-
-
-
-
 int main()
 {
 	RenderWindow window(VideoMode(600, 600), "Mandelbrot");
@@ -391,8 +389,8 @@ int main()
 	Robot robot = Robot(Vector2i(0, 0), map);
 
 	RobotState goalState = RobotState();
-	goalState.position.x = 5;
-	goalState.position.y = 5;								//USE PYTHAG HEIURISTIC
+	goalState.position.x = 9;
+	goalState.position.y = 9;								//USE PYTHAG HEIURISTIC
 
 	robot.setGoalState(goalState);
 
