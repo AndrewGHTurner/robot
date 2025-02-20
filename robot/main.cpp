@@ -68,6 +68,13 @@ public:
 	}
 };
 
+class WorldState
+{
+public:
+	RobotState robotState;
+	Vector2i boxPosition;
+};
+
 class Action
 {
 protected:
