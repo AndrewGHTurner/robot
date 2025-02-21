@@ -284,6 +284,9 @@ public:
 			Action* nextAction = actions[plan[0]];
 			nextAction->apply(this->knownWorldState.robot, ActualWorldState);
 
+			//update the robots known world state
+			knownWorldState.world = ActualWorldState;
+
 			shownPosition = (Vector2f)this->knownWorldState.robot.position;
 			plan.erase(plan.begin());
 			draw();
@@ -403,6 +406,8 @@ public:
 	}
 	vector<int> generatePlan(Robot& robot)
 	{
+		searchedStates.clear();
+		openSearchNodes.clear();
 		numSearchNodes = 0;
 		vector<Action*> actions = robot.actions;
 		addOpenNode(0, 0, robot.knownWorldState, nullptr, -1);
@@ -575,6 +580,15 @@ int main()
 	const int frameRateLimit = 1;
 	window.setFramerateLimit(5);
 
+	bool cakeSelected = false;
+	Vector2i selectedQuad = Vector2i(-1, -1);
+	sf::RectangleShape selectionIndicator(sf::Vector2f(quadSize, quadSize));
+	selectionIndicator.setFillColor(sf::Color::Transparent); 
+	selectionIndicator.setOutlineThickness(5.f);  
+	selectionIndicator.setOutlineColor(sf::Color::Yellow);
+
+	string state = "nothing selected";
+
 	while (window.isOpen())
 	{
 		Event event;
@@ -583,6 +597,38 @@ int main()
 			if (event.type == Event::Closed)
 			{
 				window.close();
+			}
+			if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left)
+			{
+				cout << state << endl;
+				sf::Vector2i mousePosition = sf::Mouse::getPosition(window);
+				Vector2i mouseMapPosition = Vector2i(mousePosition.x - mapOffset.x, mousePosition.y - mapOffset.y);
+				cout << mouseMapPosition.x << ", " << mouseMapPosition.y << endl;
+				Vector2i quadCoord = Vector2i(mouseMapPosition.x / quadSize, mouseMapPosition.y / quadSize);
+				cout << quadCoord.x << ", " << quadCoord.y << endl;
+
+				if (state == "selecting new robot position")
+				{
+					robot.goalState.robot.position = quadCoord;
+					state = "nothing selected";
+				}
+				else if (state == "selecting new cake position")
+				{
+					robot.goalState.world.cakePosition = quadCoord;
+					state = "nothing selected";
+				}
+				else if (quadCoord == ActualWorldState.cakePosition)
+				{
+					state = "selecting new cake position";
+					Vector2f indicatorPosition = Vector2f((quadCoord.x * quadSize) + mapOffset.x, (quadCoord.y * quadSize) + mapOffset.y);
+					selectionIndicator.setPosition(indicatorPosition);
+				}
+				else if (quadCoord == robot.knownWorldState.robot.position)
+				{
+					state = "selecting new robot position";
+					Vector2f indicatorPosition = Vector2f((quadCoord.x * quadSize) + mapOffset.x, (quadCoord.y * quadSize) + mapOffset.y);
+					selectionIndicator.setPosition(indicatorPosition);
+				}
 			}
 		}
 
@@ -596,7 +642,30 @@ int main()
 		window.draw(map);
 		window.draw(robot.square);
 		window.draw(circle);
+		if (state != "nothing selected")
+		{
+			window.draw(selectionIndicator);
+		}
+		
 		robot.run();
+
+		//SHOULD MOVE THIS INTO THE ROBOT RUN METHOD
+		if (robot.plan.size() == 0)
+		{
+			if (!(robot.knownWorldState == robot.goalState))
+			{
+				vector<int> actions = planner.generatePlan(robot);
+				cout << "Number of actions: " << actions.size() << endl;
+				for (int i : actions)
+				{
+					//copy actions into robot's plan
+					cout << i << endl;
+					robot.plan.push_back(i);
+				}
+			}
+		}
+
+
 		window.display();
 	}
 	return 0;
