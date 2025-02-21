@@ -495,29 +495,29 @@ float manhattanHeuristic(RobotMentalState startState, RobotMentalState goalState
 {
 	float finalCost = 0;
 	//if the cake is not at the goal location
-	if (goalState.world.cakePosition != startState.world.cakePosition)
-	{
-		//if the robot is not holding the cake
-		if (!startState.robot.holdingCake)
-		{
-			//add the cost of picking up the cake
-			finalCost += pickUpPutDownCost;
-		}
-		//if the robot is not at the location of the cake
-		if (startState.robot.position != startState.world.cakePosition)
-		{
-			//add the cost of moving towards the cake
-			finalCost += (manhattanDistance(startState.robot.position, startState.world.cakePosition) * movementCost);
-		}
-		//if the goal state is to not be holding the cake
-		if (goalState.robot.holdingCake == false)
-		{
-			//add the cost of putting down the cake
-			finalCost += pickUpPutDownCost;
-		}
-	}
-	//add cost of moving the cake
-	finalCost += (manhattanDistance(startState.world.cakePosition, goalState.world.cakePosition) * cakeMovementCost);
+	//if (goalState.world.cakePosition != startState.world.cakePosition)
+	//{
+	//	//if the robot is not holding the cake
+	//	if (!startState.robot.holdingCake)
+	//	{
+	//		//add the cost of picking up the cake
+	//		finalCost += pickUpPutDownCost;
+	//	}
+	//	//if the robot is not at the location of the cake
+	//	if (startState.robot.position != startState.world.cakePosition)
+	//	{
+	//		//add the cost of moving towards the cake
+	//		finalCost += (manhattanDistance(startState.robot.position, startState.world.cakePosition) * movementCost);
+	//	}
+	//	//if the goal state is to not be holding the cake
+	//	if (goalState.robot.holdingCake == false)
+	//	{
+	//		//add the cost of putting down the cake
+	//		finalCost += pickUpPutDownCost;
+	//	}
+	//}
+	////add cost of moving the cake
+	//finalCost += (manhattanDistance(startState.world.cakePosition, goalState.world.cakePosition) * cakeMovementCost);
 	//add the cost of moving the robot to the goal position
 	finalCost += (manhattanDistance(startState.robot.position, goalState.robot.position) * movementCost);
 	return finalCost * 1.5;
